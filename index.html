@@ -2,44 +2,36 @@
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Striker Sprint: World Cup Final</title>
+    <title>Striker Sprint: Ultimate</title>
     <style>
-        body { 
-            text-align: center; font-family: 'Segoe UI', sans-serif; background: #121212; color: white; 
-            margin: 0; overflow: hidden; touch-action: manipulation;
-        }
-        canvas { 
-            background: #2e7d32; display: block; margin: 10px auto; 
-            border: 3px solid #ffffff; border-radius: 8px; 
-            max-width: 95%; height: auto; touch-action: none;
-        }
-        .ui-box { background: #333; padding: 8px; border-radius: 10px; display: inline-block; margin: 5px; border: 1px solid #555; font-size: 14px; }
-        #flagSelector { font-size: 45px; cursor: pointer; margin-top: 10px; display: flex; flex-wrap: wrap; justify-content: center; }
-        .flag-btn { margin: 10px; transition: transform 0.2s; }
-        .flag-btn:hover { transform: scale(1.3); }
-        .instruction { font-size: 20px; color: #FFD700; margin-top: 15px; font-weight: bold; }
-        #leaderboard { margin-top: 10px; font-size: 14px; color: #ccc; }
-        .controls-hint { font-size: 12px; color: #aaa; margin-bottom: 5px; }
+        body { text-align: center; font-family: 'Segoe UI', sans-serif; background: #0a0a0a; color: white; margin: 0; overflow: hidden; touch-action: manipulation; }
+        canvas { background: #1b5e20; display: block; margin: 10px auto; border: 4px solid #fff; border-radius: 8px; max-width: 95%; height: auto; touch-action: none; }
+        .ui-box { background: #222; padding: 10px; border-radius: 5px; display: inline-block; margin: 5px; border: 2px solid #444; font-size: 14px; }
+        #flagSelector { font-size: 50px; cursor: pointer; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; margin-top: 10px; }
+        .flag-btn { transition: 0.2s; -webkit-tap-highlight-color: transparent; }
+        .flag-btn:active { transform: scale(1.4); }
+        .leaderboard-table { margin: 15px auto; width: 220px; background: #1a1a1a; border: 1px solid #FFD700; border-radius: 5px; }
+        .gold { color: #FFD700; font-weight: bold; }
+        .instruction { font-size: 18px; color: #FFD700; margin-top: 15px; font-weight: bold; text-transform: uppercase; }
     </style>
 </head>
 <body>
-    <h2 style="margin: 10px 0;">🏆 STRIKER SPRINT 🏆</h2>
+    <h2 style="margin: 10px 0;">🌟 STRIKER SPRINT: ULTIMATE 🌟</h2>
     
     <div id="setupMenu">
-        <div class="instruction">👇 CHOOSE YOUR COUNTRY 👇</div>
+        <div class="instruction">Select Your Nation</div>
         <div id="flagSelector">
-            <span class="flag-btn" onclick="selectCountry('BR')">🇧🇷</span>
-            <span class="flag-btn" onclick="selectCountry('AR')">🇦🇷</span>
-            <span class="flag-btn" onclick="selectCountry('FR')">🇫🇷</span>
-            <span class="flag-btn" onclick="selectCountry('DE')">🇩🇪</span>
-            <span class="flag-btn" onclick="selectCountry('IT')">🇮🇹</span>
-            <span class="flag-btn" onclick="selectCountry('CA')">🇨🇦</span>
+            <span class="flag-btn" onclick="selectCountry(event, 'BR')">🇧🇷</span>
+            <span class="flag-btn" onclick="selectCountry(event, 'AR')">🇦🇷</span>
+            <span class="flag-btn" onclick="selectCountry(event, 'FR')">🇫🇷</span>
+            <span class="flag-btn" onclick="selectCountry(event, 'DE')">🇩🇪</span>
+            <span class="flag-btn" onclick="selectCountry(event, 'IT')">🇮🇹</span>
+            <span class="flag-btn" onclick="selectCountry(event, 'CA')">🇨🇦</span>
         </div>
-        <div id="leaderboard"></div>
+        <div id="leaderboardUI"></div>
     </div>
 
     <div id="gameUI" style="display:none;">
-        <div class="controls-hint">PC: ARROWS | MOBILE: TAP LEFT (JUMP) / RIGHT (SHOOT)</div>
         <canvas id="gameCanvas" width="800" height="300"></canvas>
         <div class="ui-box" id="teamLabel"></div>
     </div>
@@ -48,205 +40,170 @@
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
 
-        let score = 0;
-        let highscores = JSON.parse(localStorage.getItem("strikerLeaderboard")) || [0, 0, 0];
+        let score = 0, highscores = JSON.parse(localStorage.getItem("strikerLeaderboardV3")) || [0, 0, 0];
         let gameSpeed = 6, isGameOver = false, gameStarted = false, frameCount = 0;
-        let nextBossScore = 200, yellowCards = 0, varUsed = false, isVAR = false, varTimer = 0, varPendingResume = false;
-        let countrySelected = false;
+        let yellowCards = 0, varUsed = false, isVAR = false, varTimer = 0, varPendingResume = false;
+        let countrySelected = false, isGolden = false, goldenTimer = 0;
+        let animationId; // To track and stop the game loop properly
+
+        let rainDrops = [];
+        for(let i=0; i<50; i++) rainDrops.push({x: Math.random()*800, y: Math.random()*300, s: Math.random()*5+5});
 
         const countryTeams = {
-            "BR": { primary: "#FFD700", secondary: "#008000", name: "BRAZIL" },
-            "AR": { primary: "#87CEEB", secondary: "#FFFFFF", name: "ARGENTINA" },
-            "FR": { primary: "#0000FF", secondary: "#FFFFFF", name: "FRANCE" },
-            "DE": { primary: "#FFFFFF", secondary: "#000000", name: "GERMANY" },
-            "IT": { primary: "#004BB3", secondary: "#FFFFFF", name: "ITALY" },
-            "CA": { primary: "#FF0000", secondary: "#FFFFFF", name: "CANADA" }
+            "BR": { primary: "#FFD700", name: "BRAZIL" }, "AR": { primary: "#87CEEB", name: "ARGENTINA" },
+            "FR": { primary: "#0000FF", name: "FRANCE" }, "DE": { primary: "#FFFFFF", name: "GERMANY" },
+            "IT": { primary: "#004BB3", name: "ITALY" }, "CA": { primary: "#FF0000", name: "CANADA" }
         };
         let selectedTeam = countryTeams["BR"];
 
         const GROUND_Y = 280;
         const player = { x: 80, y: 220, w: 30, h: 60, dy: 0, jumpForce: 13, gravity: 0.7, grounded: false };
-        const ball = { x: 100, y: 260, r: 10, isKicked: false, bounce: false };
-        let obstacles = [], airObstacles = [];
-        const bossRef = { x: 1000, y: 190, w: 30, h: 90, active: false };
-        const goal = { x: 1200, y: 100, w: 60, h: 160, active: false };
+        const ball = { x: 100, y: 260, r: 10, isKicked: false };
+        let obstacles = [], airObstacles = [], powerUps = [], nextBossScore = 200;
+        const bossRef = { x: 1000, active: false }; const goal = { x: 1200, active: false };
 
-        function updateLeaderboardUI() {
-            const lb = document.getElementById("leaderboard");
-            lb.innerHTML = "<b>LOCAL TOP RUNS:</b><br>" + 
-                highscores.map((s, i) => `${i+1}. ${Math.floor(s)} pts`).join(" | ");
+        function renderLeaderboard() {
+            const container = document.getElementById("leaderboardUI");
+            let html = `<table class="leaderboard-table">`;
+            const icons = ["🥇", "🥈", "🥉"];
+            highscores.forEach((s, i) => html += `<tr><td>${icons[i]}</td><td class="${i===0?'gold':''}">${Math.floor(s)} pts</td></tr>`);
+            container.innerHTML = html + `</table>`;
         }
 
-        function selectCountry(code) {
+        function selectCountry(e, code) {
+            e.preventDefault(); e.stopPropagation();
             selectedTeam = countryTeams[code];
-            countrySelected = true;
-            document.getElementById("setupMenu").style.display = 'none';
-            document.getElementById("gameUI").style.display = 'block';
-            document.getElementById("teamLabel").innerText = "Team: " + selectedTeam.name;
-            draw(); 
+            setTimeout(() => {
+                countrySelected = true;
+                document.getElementById("setupMenu").style.display = 'none';
+                document.getElementById("gameUI").style.display = 'block';
+                document.getElementById("teamLabel").innerText = "REPRESENTING: " + selectedTeam.name;
+                draw();
+            }, 200);
         }
 
-        function triggerHaptic(type) {
-            if (navigator.vibrate) {
-                if (type === 'hit') navigator.vibrate(80);
-                if (type === 'goal') navigator.vibrate([50, 30, 50]);
-                if (type === 'red') navigator.vibrate(400);
-            }
-        }
-
-        function spawnObject() {
-            if (!gameStarted || isGameOver || isVAR || varPendingResume) return;
-            if (score >= nextBossScore && !bossRef.active && !goal.active) {
-                bossRef.active = true; bossRef.x = canvas.width + 100; return; 
-            }
-            const rand = Math.random();
-            if (rand < 0.45) obstacles.push({ x: canvas.width, y: GROUND_Y - 40, w: 30, h: 40 });
-            else if (rand < 0.75) airObstacles.push({ x: canvas.width, y: 130 + (Math.random() * 50), w: 30, h: 30, type: Math.random() > 0.5 ? "🐦" : "🍼" });
-        }
+        function triggerHaptic(t) { if (navigator.vibrate) navigator.vibrate(t==='goal'?[50,30,50]:60); }
 
         function drawStickman(x, y, color, isRef, frame) {
             const cycle = Math.sin(frame * 0.25); 
-            const armCycle = Math.cos(frame * 0.25);
-            ctx.strokeStyle = isRef ? "#000" : color;
+            ctx.strokeStyle = isRef ? "#000" : (isGolden ? "#FFD700" : color);
             ctx.lineWidth = 4; ctx.lineCap = "round";
             ctx.fillStyle = "#FFDAB9";
-            ctx.beginPath(); ctx.arc(x + 15, y + 5, 8, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.moveTo(x + 15, y + 13); ctx.lineTo(x + 15, y + 35); ctx.stroke();
-            if (!isRef) { ctx.fillStyle = color; ctx.fillRect(x + 10, y + 13, 10, 20); }
-            ctx.beginPath();
-            ctx.moveTo(x + 15, y + 18); ctx.lineTo(x + 15 + (armCycle * 15), y + 30);
-            ctx.moveTo(x + 15, y + 18); ctx.lineTo(x + 15 - (armCycle * 15), y + 30); ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(x + 15, y + 35); ctx.lineTo(x + 15 + (cycle * 20), y + 55); 
-            ctx.moveTo(x + 15, y + 35); ctx.lineTo(x + 15 - (cycle * 20), y + 55); ctx.stroke();
+            ctx.beginPath(); ctx.arc(x + 15, y + 5, 8, 0, Math.PI * 2); ctx.fill(); // Head
+            ctx.beginPath(); ctx.moveTo(x + 15, y + 13); ctx.lineTo(x + 15, y + 35); ctx.stroke(); // Body
+            if (!isRef) { ctx.fillStyle = isGolden ? "#FFD700" : color; ctx.fillRect(x + 10, y + 13, 10, 20); } // Shirt
+            ctx.beginPath(); ctx.moveTo(x + 15, y + 18); ctx.lineTo(x + 15 + (Math.cos(frame*0.25)*15), y + 30); ctx.stroke(); // Arm
+            ctx.beginPath(); ctx.moveTo(x + 15, y + 35); ctx.lineTo(x + 15 + (cycle * 20), y + 55); 
+            ctx.moveTo(x + 15, y + 35); ctx.lineTo(x + 15 - (cycle * 20), y + 55); ctx.stroke(); // Legs
         }
 
         function drawCrowd(frame) {
             ctx.font = "20px Arial";
-            for (let i = 0; i < canvas.width; i += 40) {
+            for (let i = 0; i < 800; i += 40) {
                 const wave = Math.sin((frame * 0.1) + (i * 0.05)) * 10;
-                ctx.fillText("👤", i, 60 + wave);
+                ctx.fillText("👤", i, 50 + wave);
             }
+        }
+
+        function spawnObject() {
+            if (!gameStarted || isGameOver || isVAR) return;
+            if (score >= nextBossScore && !bossRef.active && !goal.active) { bossRef.active = true; bossRef.x = 850; return; }
+            
+            const rand = Math.random();
+            if (rand < 0.04) powerUps.push({ x: 800, y: 150, w: 30, h: 30 }); 
+            if (score > 5000 && rand > 0.8) obstacles.push({ x: 800, y: GROUND_Y, w: 70, h: 20, type: 'pothole' });
+            else if (rand < 0.3) obstacles.push({ x: 800, y: GROUND_Y - 40, w: 30, h: 40, type: 'cone' });
+            else if (rand < 0.5) airObstacles.push({ x: 800, y: 140, w: 30, h: 30, type: "🐦" });
         }
 
         function update() {
             if (!gameStarted || isGameOver || varPendingResume) return;
-            if (isVAR) {
-                varTimer--; if (varTimer <= 0) varPendingResume = true;
-                draw(); requestAnimationFrame(update); return;
-            }
+            if (isVAR) { varTimer--; if (varTimer <= 0) varPendingResume = true; draw(); animationId = requestAnimationFrame(update); return; }
+            
             frameCount++;
             player.dy += player.gravity; player.y += player.dy;
             if (player.y + player.h > GROUND_Y) { player.y = GROUND_Y - player.h; player.dy = 0; player.grounded = true; }
             
-            if (!ball.isKicked) { ball.x = player.x + 35; ball.y = GROUND_Y - 15; } 
-            else {
-                ball.x += ball.bounce ? -10 : 20;
-                obstacles.forEach((obs, i) => {
-                    if (ball.x > obs.x && ball.x < obs.x + obs.w && ball.y > obs.y) {
-                        obstacles.splice(i, 1); ball.isKicked = false; score += 25; triggerHaptic('hit');
-                    }
-                });
-                if (goal.active && ball.x > goal.x && ball.y < GROUND_Y) {
-                    score += 500; goal.active = false; ball.isKicked = false; yellowCards = 0; 
-                    nextBossScore += 600; triggerHaptic('goal');
-                }
-                if (bossRef.active && ball.x > bossRef.x && ball.x < bossRef.x + bossRef.w && ball.y > bossRef.y) ball.bounce = true;
-                if (ball.x > canvas.width || ball.x < 0) { ball.isKicked = false; ball.bounce = false; }
-            }
+            if (isGolden) { goldenTimer--; if (goldenTimer <= 0) isGolden = false; }
+            if (!ball.isKicked) { ball.x = player.x + 35; ball.y = GROUND_Y - 10; } else { ball.x += 20; }
 
-            if (bossRef.active) {
-                bossRef.x -= (gameSpeed + 2);
-                if (player.x < bossRef.x + bossRef.w && player.x + player.w > bossRef.x && player.y + player.h > bossRef.y) {
-                    triggerHaptic('red');
-                    if (!varUsed) { isVAR = true; varUsed = true; varTimer = 100; } else { endGame(); }
-                }
-                if (bossRef.x + bossRef.w < 0) { bossRef.active = false; goal.active = true; goal.x = canvas.width + 100; }
-            }
-
-            if (goal.active) goal.x -= gameSpeed;
+            // Collisions
             obstacles.forEach((obs, i) => {
                 obs.x -= gameSpeed;
-                if (player.x < obs.x + obs.w && player.x + player.w > obs.x && player.y + player.h > obs.y) {
-                    obstacles.splice(i, 1); yellowCards++; triggerHaptic('hit');
-                    if (yellowCards >= 2) { if (!varUsed) { isVAR = true; varUsed = true; varTimer = 100; } else { endGame(); } }
+                if (ball.isKicked && ball.x > obs.x && ball.x < obs.x + obs.w && ball.y > obs.y - 15) {
+                    if (obs.type !== 'pothole' || isGolden) { obstacles.splice(i, 1); if(!isGolden) ball.isKicked = false; score += 50; triggerHaptic(); }
                 }
-                if (obs.x + obs.w < 0) obstacles.splice(i, 1);
+                if (player.x + 10 < obs.x + obs.w && player.x + 20 > obs.x) {
+                    if (obs.type === 'pothole' && player.y + 60 >= GROUND_Y - 5) endGame("FELL IN A POTHOLE!");
+                    else if (obs.type !== 'pothole' && player.y + 60 > obs.y) {
+                        obstacles.splice(i, 1); yellowCards++; triggerHaptic();
+                        if (yellowCards >= 2) { if(!varUsed) { isVAR = true; varUsed = true; varTimer = 100; } else endGame("RED CARD!"); }
+                    }
+                }
             });
 
-            airObstacles.forEach((obs, i) => {
-                obs.x -= (gameSpeed + 2);
-                if (player.x < obs.x + obs.w && player.x + player.w > obs.x && player.y < obs.y + obs.h && player.y + player.h > obs.y) {
-                    airObstacles.splice(i, 1); yellowCards++; triggerHaptic('hit');
-                    if (yellowCards >= 2) { if (!varUsed) { isVAR = true; varUsed = true; varTimer = 100; } else { endGame(); } }
-                }
-                if (obs.x + obs.w < 0) airObstacles.splice(i, 1);
-            });
+            powerUps.forEach((p, i) => { p.x -= gameSpeed; if (player.x < p.x + 30 && player.y < p.y + 30) { powerUps.splice(i, 1); isGolden = true; goldenTimer = 400; triggerHaptic('goal'); } });
+            if (goal.active) { goal.x -= gameSpeed; if (ball.x > goal.x && ball.isKicked) { score += 500; goal.active = false; ball.isKicked = false; yellowCards = 0; nextBossScore += 800; triggerHaptic('goal'); } }
+            if (bossRef.active) { bossRef.x -= (gameSpeed + 1); if (player.x < bossRef.x + 30 && player.x + 30 > bossRef.x && player.y + 60 > 190) endGame("THE REF CAUGHT YOU!"); if (bossRef.x < -50) { bossRef.active = false; goal.active = true; goal.x = 850; } }
 
-            score += 0.2; gameSpeed += 0.001;
-            draw(); requestAnimationFrame(update);
+            score += 0.5; gameSpeed += 0.0006;
+            draw(); 
+            animationId = requestAnimationFrame(update);
         }
 
         function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = "#1b5e20"; ctx.fillRect(0, GROUND_Y, canvas.width, 20);
+            ctx.clearRect(0, 0, 800, 300);
+            ctx.fillStyle = "#1b5e20"; ctx.fillRect(0, GROUND_Y, 800, 20);
             drawCrowd(frameCount);
-            if (!countrySelected) return;
+            
+            ctx.strokeStyle = "rgba(255,255,255,0.2)";
+            rainDrops.forEach(d => { ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(d.x-1, d.y+d.s); ctx.stroke(); d.y += d.s; if(d.y > 300) d.y = -10; });
 
-            drawStickman(player.x, player.y, selectedTeam.primary, false, player.grounded ? frameCount : 5);
-            ctx.font = "20px Arial"; ctx.fillText("⚽", ball.x - 10, ball.y + 10);
-            obstacles.forEach(obs => { ctx.fillStyle = "#FF5722"; ctx.beginPath(); ctx.moveTo(obs.x, obs.y + obs.h); ctx.lineTo(obs.x + obs.w/2, obs.y); ctx.lineTo(obs.x + obs.w, obs.y + obs.h); ctx.fill(); });
-            airObstacles.forEach(obs => { ctx.font = "24px Arial"; ctx.fillText(obs.type, obs.x, obs.y + 20); });
-            if (bossRef.active) { drawStickman(bossRef.x, bossRef.y, "#000", true, frameCount); ctx.fillStyle = "white"; ctx.font = "bold 10px Arial"; ctx.textAlign = "center"; ctx.fillText("REF", bossRef.x + 15, bossRef.y - 10); }
-            if (goal.active) { ctx.strokeStyle = "white"; ctx.lineWidth = 4; ctx.strokeRect(goal.x, goal.y, goal.w, goal.h); }
-            
-            ctx.textAlign = "left"; ctx.fillStyle = "white"; ctx.font = "bold 18px Arial";
-            ctx.fillText("SCORE: " + Math.floor(score), 10, 25);
-            ctx.fillText("🏆: " + Math.floor(highscores[0]), 10, 50);
-            if (yellowCards === 1) { ctx.fillStyle = "yellow"; ctx.fillRect(canvas.width - 40, 10, 20, 30); }
-            
-            if (isVAR) {
-                ctx.fillStyle = "rgba(0,0,100,0.7)"; ctx.fillRect(0,0,canvas.width, canvas.height);
-                ctx.fillStyle = "white"; ctx.textAlign = "center";
-                if (varPendingResume) { ctx.font = "bold 20px Arial"; ctx.fillText("VAR: PLAY ON!", canvas.width/2, 140); ctx.fillText("TAP/PRESS UP TO RESUME", canvas.width/2, 180); }
-                else { ctx.font = "bold 24px Arial"; ctx.fillText("VAR CHECKING...", canvas.width/2, 150); }
-            }
-            if (!gameStarted) { ctx.fillStyle = "rgba(0,0,0,0.85)"; ctx.fillRect(0,0,canvas.width, canvas.height); ctx.fillStyle = "white"; ctx.textAlign = "center"; ctx.font = "20px Arial"; ctx.fillText("TAP OR PRESS UP TO START", canvas.width/2, 150); }
+            obstacles.forEach(obs => {
+                if (obs.type === 'pothole') { ctx.fillStyle = "#000"; ctx.fillRect(obs.x, obs.y, obs.w, 10); }
+                else { ctx.fillStyle = "#ff5722"; ctx.beginPath(); ctx.moveTo(obs.x, obs.y + 40); ctx.lineTo(obs.x+15, obs.y); ctx.lineTo(obs.x+30, obs.y + 40); ctx.fill(); }
+            });
+
+            powerUps.forEach(p => { ctx.font = "24px Arial"; ctx.fillText("⭐", p.x, p.y); });
+            drawStickman(player.x, player.y, selectedTeam.primary, false, frameCount);
+            ctx.font = "20px Arial"; ctx.fillText(isGolden ? "☄️" : "⚽", ball.x - 10, ball.y + 10);
+            if (goal.active) { ctx.strokeStyle = "#fff"; ctx.strokeRect(goal.x, 120, 60, 160); }
+            if (bossRef.active) drawStickman(bossRef.x, 190, "#000", true, frameCount);
+
+            ctx.fillStyle = "white"; ctx.textAlign = "left"; ctx.font = "bold 16px Arial";
+            ctx.fillText("SCORE: " + Math.floor(score), 20, 30);
+            if (isGolden) { ctx.fillStyle = "#FFD700"; ctx.fillRect(20, 40, (goldenTimer/400)*100, 8); }
+            if (yellowCards === 1) { ctx.fillStyle = "yellow"; ctx.fillRect(750, 20, 20, 30); }
+            if (isVAR) { ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(0,0,800,300); ctx.fillStyle="white"; ctx.textAlign="center"; ctx.fillText(varPendingResume ? "VAR: PLAY ON! TAP TO RESUME" : "🖥️ VAR CHECKING...", 400, 150); }
+            if (!gameStarted && countrySelected) { ctx.fillStyle="rgba(0,0,0,0.5)"; ctx.fillRect(0,0,800,300); ctx.fillStyle="white"; ctx.textAlign="center"; ctx.fillText("TAP TO START", 400, 150); }
         }
 
-        function endGame() {
+        function endGame(m) { 
             isGameOver = true;
-            highscores.push(score);
-            highscores.sort((a, b) => b - a);
-            highscores = highscores.slice(0, 3);
-            localStorage.setItem("strikerLeaderboard", JSON.stringify(highscores));
-            alert("RED CARD! GAME OVER. Score: " + Math.floor(score));
-            location.reload();
+            cancelAnimationFrame(animationId); // STOP the loop immediately!
+            
+            // Short delay to ensure browser input is free
+            setTimeout(() => {
+                alert(m + "\nSCORE: " + Math.floor(score)); 
+                highscores.push(score); 
+                highscores.sort((a,b)=>b-a); 
+                localStorage.setItem("strikerLeaderboardV3", JSON.stringify(highscores.slice(0,3))); 
+                location.reload();
+            }, 50);
         }
 
-        function handleInput(xPos) {
-            if (!gameStarted && countrySelected) { gameStarted = true; update(); return; }
-            if (varPendingResume) { 
-                isVAR = false; varPendingResume = false; yellowCards = 0; 
-                airObstacles = []; obstacles = []; bossRef.active = false; goal.active = false;
-                update(); return;
-            }
-            if (xPos < window.innerWidth / 2) {
-                if (player.grounded) { player.dy = -player.jumpForce; player.grounded = false; }
-            } else {
-                if (gameStarted && !ball.isKicked && !isVAR) ball.isKicked = true;
-            }
+        function handleInput(x) {
+            if (!countrySelected || isGameOver) return;
+            if (!gameStarted) { gameStarted = true; update(); return; }
+            if (varPendingResume) { isVAR = false; varPendingResume = false; yellowCards = 0; obstacles = []; update(); return; }
+            if (x < window.innerWidth / 2) { if (player.grounded) { player.dy = -13; player.grounded = false; } }
+            else if (!ball.isKicked) ball.isKicked = true;
         }
 
-        window.addEventListener("touchstart", (e) => { e.preventDefault(); handleInput(e.touches[0].clientX); }, {passive: false});
-        window.addEventListener("mousedown", (e) => { handleInput(e.clientX); });
-        window.addEventListener("keydown", (e) => {
-            if (e.key === "ArrowUp") handleInput(0);
-            if (e.key === "ArrowRight") handleInput(window.innerWidth);
-        });
-
-        updateLeaderboardUI();
-        setInterval(spawnObject, 900);
+        window.addEventListener("touchstart", (e) => { if(countrySelected) { e.preventDefault(); handleInput(e.touches[0].clientX); }}, {passive: false});
+        window.addEventListener("mousedown", (e) => handleInput(e.clientX));
+        window.addEventListener("keydown", (e) => { if(e.key === "ArrowUp") handleInput(0); if(e.key === "ArrowRight") handleInput(window.innerWidth); });
+        renderLeaderboard(); setInterval(spawnObject, 800);
     </script>
 </body>
 </html>
